@@ -4,8 +4,8 @@ from discord.ext import commands
 import google.generativeai as genai
 
 # استبدل الرموز أدناه بالـ Tokens الخاصة بك
-DISCORD_TOKEN = "YOUR_DISCORD_TOKEN"
-GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
