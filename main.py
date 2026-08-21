@@ -5,7 +5,6 @@ import discord
 from discord.ext import commands
 from flask import Flask
 from google import genai
-from google.genai import types
 
 # ------------------ Logging ------------------
 logging.basicConfig(
@@ -25,13 +24,6 @@ if not GEMINI_API_KEY:
 
 # ------------------ Gemini API Setup ------------------
 client = genai.Client(api_key=GEMINI_API_KEY)
-
-SYSTEM_INSTRUCTION = (
-    "أنت مساعد دعم فني ودود ومختص لمتجر حسابات ألعاب في السعودية. "
-    "أجب باللهجة السعودية أو بالعربية الفصحى حسب السياق، وكن مفيداً ومختصراً. "
-    "لا تقدم أي معلومات غير متعلقة بالمتجر أو حسابات الألعاب. "
-    "إذا طُلب منك شيء خارج نطاق عملك، اعتذر بلطف ووجّه المستخدم للتواصل مع فريق الدعم البشري."
-)
 
 # ------------------ Discord Bot Setup ------------------
 intents = discord.Intents.default()
@@ -60,26 +52,28 @@ async def on_message(message):
             if not user_content:
                 return
 
-            # استخدام الموديل الأحدث والمعتمد رسميًا من جوجل
-            response = client.models.generate_content(
-                model="gemini-3.7-flash",
-                contents=user_content,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    max_output_tokens=500,
-                    temperature=0.7,
-                ),
+            # دمج توجيه المتجر مع رسالة المستخدم مباشرة لضمان عدم حظر الرد أو تعليقه
+            prompt = (
+                "أنت مساعد دعم فني لمتجر حسابات ألعاب في السعودية. "
+                "أجب باللهجة السعودية أو العربية الفصحى باختصار وبدون تعقيد على الرسالة التالية:\n"
+                f"{user_content}"
             )
 
-            reply = response.text.strip()
+            response = client.models.generate_content(
+                model="gemini-3.7-flash",
+                contents=prompt,
+            )
 
-            if len(reply) > 2000:
-                reply = reply[:1997] + "..."
-
-            await message.reply(reply)
+            if response and response.text:
+                reply = response.text.strip()
+                if len(reply) > 2000:
+                    reply = reply[:1997] + "..."
+                await message.reply(reply)
+            else:
+                await message.reply("عليكم السلام ورحمة الله وبركاته، تفادياً لأي تأخير تواصل مع الدعم البشري.")
 
         except Exception as e:
-            logger.error(f"Gemini API error: {e}", exc_info+True)
+            logger.error(f"Gemini API error: {e}", exc_info=True)
             await message.reply(
                 "حدث خطأ تقني مؤقت. يرجى المحاولة بعد قليل. إذا استمرت المشكلة، تواصل مع فريق الدعم البشري."
             )
