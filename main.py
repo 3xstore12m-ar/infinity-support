@@ -4,7 +4,8 @@ import threading
 import discord
 from discord.ext import commands
 from flask import Flask
-from openai import OpenAI
+from google import genai
+from google.genai import types
 
 # ------------------ Logging ------------------
 logging.basicConfig(
@@ -15,21 +16,19 @@ logger = logging.getLogger(__name__)
 
 # ------------------ Environment Variables ------------------
 DISCORD_TOKEN = os.environ.get('DISCORD_TOKEN')
-DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 if not DISCORD_TOKEN:
     raise ValueError("DISCORD_TOKEN is not set in environment variables.")
-if not DEEPSEEK_API_KEY:
-    raise ValueError("DEEPSEEK_API_KEY is not set in environment variables.")
+if not GEMINI_API_KEY:
+    raise ValueError("GEMINI_API_KEY is not set in environment variables.")
 
-# ------------------ DeepSeek API Setup ------------------
-client = OpenAI(
-    api_key=DEEPSEEK_API_KEY,
-    base_url="https://api.deepseek.com"
-)
+# ------------------ Gemini API Setup ------------------
+# تهيئة العميل الجديد باستخدام مكتبة google-genai
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-# System prompt – موجه النظام لدعم متجر الألعاب
-SYSTEM_PROMPT = (
+# موجه النظام لدعم متجر الألعاب
+SYSTEM_INSTRUCTION = (
     "أنت مساعد دعم فني ودود ومختص لمتجر حسابات ألعاب في السعودية. "
     "أجب باللهجة السعودية أو بالعربية الفصحى حسب السياق، وكن مفيداً ومختصراً. "
     "لا تقدم أي معلومات غير متعلقة بالمتجر أو حسابات الألعاب. "
@@ -64,17 +63,18 @@ async def on_message(message):
             if not user_content:
                 return
 
-            # إرسال الطلب إلى DeepSeek
-            response = client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": user_content}
-                ],
-                stream=False
+            # إرسال الطلب إلى نموذج Gemini Flash السريع والمجاني
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=user_content,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_INSTRUCTION,
+                    max_output_tokens=500,
+                    temperature=0.7,
+                ),
             )
 
-            reply = response.choices[0].message.content.strip()
+            reply = response.text.strip()
 
             if len(reply) > 2000:
                 reply = reply[:1997] + "..."
@@ -82,7 +82,7 @@ async def on_message(message):
             await message.reply(reply)
 
         except Exception as e:
-            logger.error(f"DeepSeek API error: {e}", exc_info=True)
+            logger.error(f"Gemini API error: {e}", exc_info=True)
             await message.reply(
                 "حدث خطأ تقني مؤقت. يرجى المحاولة بعد قليل. إذا استمرت المشكلة، تواصل مع فريق الدعم البشري."
             )
