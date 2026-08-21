@@ -60,14 +60,14 @@ async def on_message(message):
             channel_id = message.channel.id
             guild = message.guild
 
-            # فحص رومات قسم المنتجات وقراءة محتواها لتعرف الحالة الحقيقية
+            # فحص رومات قسم المنتجات وقراءة آخر المحتوى لمعرفة الحالة الدقيقة
             product_status_info = "لا توجد رومات منتجات واضحة."
             for channel in guild.text_channels:
                 if "قسم-المنتجات" in channel.name or "stock" in channel.name:
                     try:
                         async for hist_msg in channel.history(limit=3):
                             if "جاري العمل عليها" in hist_msg.content:
-                                product_status_info = f"رومات المنتجات موجودة ({channel.name}) ولكن الحالة حالياً: جاري العمل عليها وتجهيزها."
+                                product_status_info = f"رومات المنتجات موجودة ({channel.name}) ولكن حالتها حالياً: جاري العمل عليها وتجهيزها."
                                 break
                             elif hist_msg.content:
                                 product_status_info = f"رومات المنتجات موجودة ({channel.name}) وتحتوي على تحديثات."
@@ -78,23 +78,21 @@ async def on_message(message):
             if channel_id not in channel_histories:
                 channel_histories[channel_id] = []
 
-            # إضافة رسالة المستخدم للذاكرة
             channel_histories[channel_id].append(f"الزبون: {user_content}")
-            if len(channel_histories[channel_id]) > 10:  # الاحتفاظ بآخر 10 رسائل فقط لعدم التشتت
+            if len(channel_histories[channel_id]) > 10:
                 channel_histories[channel_id].pop(0)
 
             history_text = "\n".join(channel_histories[channel_id])
 
             # التعليمات الصارمة للبوت
             system_prompt = (
-                "أنت موظف دعم فني ذكي و رسمي لمتجر حسابات ألعاب داخل سيرفر ديسكورد فقط.\n"
+                "أنت موظف دعم فني ذكي و رسمى لمتجر حسابات ألعاب داخل سيرفر ديسكورد فقط.\n"
                 "قواعد صارمة جداً:\n"
-                "1. ممنوع نهائياً ذكر أي 'موقع إلكتروني' أو زيارة رابط خارجي.\n"
+                "1. ممنوع نهائياً ذكر أي 'موقع إلكتروني' أو زيارة رابط خارجي خارج الديسكورد.\n"
                 "2. لا تجاوب بأي أجوبة عشوائية. حالة المنتجات الحقيقية في السيرفر هي: " + product_status_info + "\n"
-                "   بناءً على ذلك، إذا سأل عن توفر الحسابات ووجدت أنها 'جاري العمل عليها'، أخبره أن الرومات موجودة ولكنها قيد التجهيز والصيانة حالياً وستتوفر قريباً.\n"
                 "3. تحدث باللهجة السعودية الرسمية والمهذبة، وبدون إطالة.\n"
-                "4. تذكر سياق المحادثة السابقة بينك وبينه، ولا تبدأ كلام جديد كلياً إذا كان يكمل نقاشاً سابقاً.\n"
-                "5. إذا طلب التحدث مع الإدارة أو وافق على تنبيههم، انهِ ردك بكلمة [CALL_ADMIN] في نهاية الجملة.\n\n"
+                "4. تذكر سياق المحادثة السابقة بينك وبينه تماماً.\n"
+                "5. إذا طلب الزبون التحدث مع الإدارة أو الدعم الفني بشدة، أو وافق على أن يكلمه أحد، انهِ ردك بكلمة [CALL_ADMIN] في نهاية الجملة.\n\n"
                 f"سجل المحادثة السابقة:\n{history_text}\n\n"
                 "رد على آخر رسالة للزبون بناءً على التعليمات السابقة:"
             )
@@ -120,26 +118,27 @@ async def on_message(message):
                 if len(reply) > 2000:
                     reply = reply[:1997] + "..."
                 
-                # حفظ رد البوت في الذاكرة أيضاً
                 channel_histories[channel_id].append(f"البوت: {reply}")
                 await message.reply(reply)
 
-                # إذا وافق الزبون وتم استدعاء الإدارة، نقوم بعمل منشن حقيقي للمشرفين
+                # إذا وافق الزبون، يقوم البوت بمنشن رتبة الدعم الفني المخصصة في السيرفر
                 if need_admin_call:
-                    admin_mentions = []
-                    for member in guild.members:
-                        # التحقق من رتب الإدارة بناءً على السيرفر عندك (Founder, Admin, Store Owner)
-                        role_names = [role.name.lower() for role in member.roles]
-                        if any(r in role_names for r in ["admin", "founder", "store owner", "owner"]):
-                            if not member.bot:
-                                admin_mentions.append(member.mention)
+                    target_role_name = "support" # اسم الرتبة المخصصة للدعم الفني
+                    role_to_mention = discord.utils.get(guild.roles, name=target_role_name)
                     
-                    if admin_mentions:
-                        # منشن أول 3 مشرفين متواجدين لتنبيههم في التكت
-                        mentions_str = " ".join(admin_mentions[:3])
-                        await message.channel.Send(f"🚨 تنبيه للإدارة: {mentions_str}، يرجى متابعة التكت، العميل بحاجة لكم!")
+                    if not role_to_mention:
+                        # محاولة بحث بالعربي لو الرتبة مسماة بالعربي
+                        role_to_mention = discord.utils.get(guild.roles, name="الدعم الفني")
+
+                    if role_to_mention:
+                        await message.channel.send(f"🚨 تنبيه لفريق الدعم: {role_to_mention.mention}، يوجد عميل بحاجة لمساعدتكم في هذا التكت!")
                     else:
-                        await message.channel.Send("⚠️ عذراً، لم يتم العثور على مشرفين متاحين حالياً، سيتم خدمتهم قريباً.")
+                        # خيار احتياطي لو لم تُوجد رتبة الدعم المخصصة، يمنشن رتبة Admin العادية
+                        admin_role = discord.utils.get(guild.roles, name="▴|  𝗔𝗱𝗺𝗶𝗻")
+                        if admin_role:
+                            await message.channel.send(f"🚨 تنبيه للإدارة: {admin_role.mention}، يوجد عميل بحاجة لمساعدتكم!")
+                        else:
+                            await message.channel.send("⚠️ تنبيه: لم يتم العثور على رتبة الدعم المخصصة، يرجى متابعة التكت من الإدارة.")
 
             else:
                 await message.reply("حياك الله، تفضل بطلبك أو انتظر أحد الإدارة يخدمك.")
