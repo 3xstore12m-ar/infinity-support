@@ -58,12 +58,12 @@ async def on_message(message):
                 f"{user_content}"
             )
 
+            # استخدام النموذج الأكثر استقراراً لتجنب ضغط الخوادم (503)
             response = client.models.generate_content(
-                model="gemini-3.7-flash",
+                model="gemini-2.5-flash",
                 contents=prompt,
             )
 
-            # استخراج النص بطريقة آمنة ومضمونة 100%
             reply = ""
             if hasattr(response, 'text') and response.text:
                 reply = response.text.strip()
