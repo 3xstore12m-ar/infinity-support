@@ -33,8 +33,10 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ذاكرة مؤقتة لحفظ سجلات المحادثة لكل تكت (تستخدم للردود والسجلات)
+# ذاكرة مؤقتة لحفظ سجلات المحادثة لكل تكت
 channel_histories = {}
+# مجموعة لتتبع التكتات التي تم إرسال رسالة الترحيب لها لمنع تكرارها
+welcomed_channels = set()
 
 # ------------------ Interactive Buttons View ------------------
 class SupportView(discord.ui.View):
@@ -67,16 +69,13 @@ class SupportView(discord.ui.View):
             guild = interaction.guild
             channel_id = channel.id
 
-            # البحث عن روم السجلات المخصص
             log_channel = discord.utils.get(guild.text_channels, name="▵سجلات-التذاكر") or discord.utils.get(guild.text_channels, name="سجلات-التذاكر")
 
-            # تجهيز نص السجل إذا كان متوفراً
             if channel_id in channel_histories and channel_histories[channel_id]:
                 log_content = "\n".join(channel_histories[channel_id])
             else:
                 log_content = "لم يتم تسجيل محادثة مفصلة داخل هذا التكت."
 
-            # إرسال السجل إلى روم السجلات إذا وجد
             if log_channel:
                 embed = discord.Embed(
                     title=f"🔒 تقرير إغلاق تكت: {channel.name}",
@@ -84,19 +83,18 @@ class SupportView(discord.ui.View):
                 )
                 embed.add_field(name="بواسطة", value=interaction.user.mention, inline=False)
                 
-                # اقتطاع المحتوى إذا كان طويلاً جداً لتجنب حدود ديسكورد
                 if len(log_content) > 1024:
                     log_content = log_content[-1021:] + "..."
                 embed.add_field(name="ملخص المحادثة", value=log_content, inline=False)
                 
                 await log_channel.send(embed=embed)
 
-            # حذف روم التكت
             await channel.delete(reason="تم إغلاق التكت وحفظ السجل.")
             
-            # مسح الذاكرة المؤقتة لهذا التكت
             if channel_id in channel_histories:
                 del channel_histories[channel_id]
+            if channel_id in welcomed_channels:
+                welcomed_channels.remove(channel_id)
 
         except Exception as e:
             logger.error(f"Error handling ticket closure and logs: {e}")
@@ -105,27 +103,6 @@ class SupportView(discord.ui.View):
 async def on_ready():
     logger.info(f'Bot logged in as {bot.user} (ID: {bot.user.id})')
     logger.info('------')
-
-# ترحيب تلقائي أول ما ينفتح تكت جديد
-@bot.event
-async def on_guild_channel_create(channel):
-    if isinstance(channel, discord.TextChannel) and "ticket" in channel.name.lower():
-        import asyncio
-        await asyncio.sleep(1.5)
-        try:
-            view = SupportView()
-            welcome_msg = "حياك الله طال عمرك في متجرنا! 🤝\nكيف أقدر أخدمك بخصوص حسابات المتجر والخدمات العامة اليوم؟ تفضل بطلبك أو اختر من الأزرار أدناه:"
-            
-            # إرسال رسالة الترحيب وتخزينها في السجل
-            msg = await channel.send(welcome_msg, view=view)
-            
-            channel_id = channel.id
-            if channel_id not in channel_histories:
-                channel_histories[channel_id] = []
-            channel_histories[channel_id].append(f"البوت (ترحيب): {welcome_msg}")
-            
-        except Exception as e:
-            logger.error(f"Error sending automatic welcome message in new ticket: {e}")
 
 @bot.event
 async def on_message(message):
@@ -143,9 +120,18 @@ async def on_message(message):
     if channel_id not in channel_histories:
         channel_histories[channel_id] = []
 
+    # إذا كان هذا اول تفاعل بالروم ولم يتم الترحيب بعد، نرسل رسالة الترحيب مع الأزرار أولاً
+    if channel_id not in welcomed_channels:
+        welcomed_channels.add(channel_id)
+        welcome_text = "حياك الله طال عمرك في متجرنا! 🤝\nكيف أقدر أخدمك بخصوص حسابات المتجر والخدمات العامة اليوم؟ تفضل بطلبك أو اختر من الأزرار أدناه:"
+        channel_histories[channel_id].append(f"البوت (ترحيب): {welcome_text}")
+        
+        view = SupportView()
+        await message.channel.send(welcome_text, view=view)
+
     if user_content:
         channel_histories[channel_id].append(f"الزبون ({message.author.name}): {user_content}")
-        if len(channel_histories[channel_id]) > 30: # زيادة السعة لحفظ سجل أكبر للتكت
+        if len(channel_histories[channel_id]) > 30:
             channel_histories[channel_id].pop(0)
 
     async with message.channel.typing():
@@ -193,8 +179,8 @@ async def on_message(message):
                 
                 channel_histories[channel_id].append(f"البوت: {reply}")
                 
-                view = SupportView()
-                await message.reply(reply, view=view)
+                # الرد النصي الخالص بدون أزرار متكررة
+                await message.reply(reply)
 
                 if need_admin_call:
                     target_role = discord.utils.get(guild.roles, name="Support") or discord.utils.get(guild.roles, name="الدعم الفني") or discord.utils.get(guild.roles, name="▴|  𝗔𝗱𝗺𝗶𝗻")
@@ -204,8 +190,7 @@ async def on_message(message):
                         await message.channel.send("🚨 تنبيه للإدارة: @admin، يوجد عميل بحاجة لمساعدتكم!")
 
             else:
-                view = SupportView()
-                await message.reply("حياك الله، تفضل بطلبك أو اختر من الأزرار بالأسفل.", view=view)
+                await message.reply("حياك الله، تفضل بطلبك وسأقوم بمساعدتك.")
 
         except Exception as e:
             logger.error(f"Gemini API error: {e}", exc_info=True)
