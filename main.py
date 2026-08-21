@@ -60,9 +60,9 @@ async def on_message(message):
             if not user_content:
                 return
 
-            # تم تعديل اسم الموديل هنا حصرياً ليتوافق مع استجابة جوجل الصحيحة والمستقرة
+            # استخدام الموديل الأحدث والمعتمد رسميًا من جوجل
             response = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-3.7-flash",
                 contents=user_content,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
@@ -79,7 +79,7 @@ async def on_message(message):
             await message.reply(reply)
 
         except Exception as e:
-            logger.error(f"Gemini API error: {e}", exc_info=True)
+            logger.error(f"Gemini API error: {e}", exc_info+True)
             await message.reply(
                 "حدث خطأ تقني مؤقت. يرجى المحاولة بعد قليل. إذا استمرت المشكلة، تواصل مع فريق الدعم البشري."
             )
