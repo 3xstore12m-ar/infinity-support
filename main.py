@@ -24,10 +24,8 @@ if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY is not set in environment variables.")
 
 # ------------------ Gemini API Setup ------------------
-# تهيئة العميل الجديد باستخدام مكتبة google-genai
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# موجه النظام لدعم متجر الألعاب
 SYSTEM_INSTRUCTION = (
     "أنت مساعد دعم فني ودود ومختص لمتجر حسابات ألعاب في السعودية. "
     "أجب باللهجة السعودية أو بالعربية الفصحى حسب السياق، وكن مفيداً ومختصراً. "
@@ -52,7 +50,6 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # الرد فقط داخل قنوات التذاكر التي تحتوي على كلمة ticket
     if not message.channel.name or "ticket" not in message.channel.name.lower():
         await bot.process_commands(message)
         return
@@ -63,9 +60,9 @@ async def on_message(message):
             if not user_content:
                 return
 
-            # إرسال الطلب إلى نموذج Gemini Flash السريع والمجاني
+            # تم تعديل اسم الموديل هنا حصرياً ليتوافق مع استجابة جوجل الصحيحة والمستقرة
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-1.5-flash",
                 contents=user_content,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
