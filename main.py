@@ -58,9 +58,9 @@ async def on_message(message):
                 f"{user_content}"
             )
 
-            # استخدام النموذج الأكثر استقراراً لتجنب ضغط الخوادم (503)
+            # استخدام النموذج المطلوب: gemini-3.5-flash-lite
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3.5-flash-lite",
                 contents=prompt,
             )
 
