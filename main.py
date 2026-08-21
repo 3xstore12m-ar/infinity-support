@@ -52,7 +52,6 @@ async def on_message(message):
             if not user_content:
                 return
 
-            # دمج توجيه المتجر مع رسالة المستخدم مباشرة لضمان عدم حظر الرد أو تعليقه
             prompt = (
                 "أنت مساعد دعم فني لمتجر حسابات ألعاب في السعودية. "
                 "أجب باللهجة السعودية أو العربية الفصحى باختصار وبدون تعقيد على الرسالة التالية:\n"
@@ -64,13 +63,19 @@ async def on_message(message):
                 contents=prompt,
             )
 
-            if response and response.text:
+            # استخراج النص بطريقة آمنة ومضمونة 100%
+            reply = ""
+            if hasattr(response, 'text') and response.text:
                 reply = response.text.strip()
+            elif response.candidates and response.candidates[0].content.parts:
+                reply = response.candidates[0].content.parts[0].text.strip()
+
+            if reply:
                 if len(reply) > 2000:
                     reply = reply[:1997] + "..."
                 await message.reply(reply)
             else:
-                await message.reply("عليكم السلام ورحمة الله وبركاته، تفادياً لأي تأخير تواصل مع الدعم البشري.")
+                await message.reply("حياك الله، تفضل بطلبك أو تواصل مع الدعم البشري للمساعدة.")
 
         except Exception as e:
             logger.error(f"Gemini API error: {e}", exc_info=True)
