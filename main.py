@@ -28,7 +28,6 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # ------------------ Discord Bot Setup ------------------
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members =^ discord.Intents.default() # تم تصحيحها بالأسفل للتوافق الصحيح
 intents.members = True
 intents.guilds = True
 
@@ -52,7 +51,6 @@ class SupportView(discord.ui.View):
     @discord.ui.button(label="طلب الإدارة / الدعم", style=discord.ButtonStyle.danger, emoji="🚨")
     async def call_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
         guild = interaction.guild
-        # البحث عن رتبة الدعم المخصصة أو الإدارة
         target_role = discord.utils.get(guild.roles, name="Support") or discord.utils.get(guild.roles, name="الدعم الفني") or discord.utils.get(guild.roles, name="▴|  𝗔𝗱𝗺𝗶𝗻")
         
         mention_text = target_role.mention if target_role else "@admin"
@@ -89,10 +87,8 @@ async def on_message(message):
             channel_id = message.channel.id
             guild = message.guild
 
-            # فحص عام لقسم المنتجات (STORE & PRODUCTS)
             category_info = "قسم المنتجات الأساسي (STORE & PRODUCTS) يحتوي على أقسام الحسابات، وهي قيد التجهيز والصيانة حالياً."
 
-            # إدارة ذاكرة المحادثة للتكت الحالي
             if channel_id not in channel_histories:
                 channel_histories[channel_id] = []
 
@@ -102,7 +98,6 @@ async def on_message(message):
 
             history_text = "\n".join(channel_histories[channel_id])
 
-            # التعليمات الصارمة للبوت
             system_prompt = (
                 "أنت موظف دعم فني ذكي ورسمي لمتجر حسابات عامة وخدمات رقمية داخل سيرفر ديسكورد فقط.\n"
                 "قواعد صارمة جداً:\n"
@@ -138,11 +133,9 @@ async def on_message(message):
                 
                 channel_histories[channel_id].append(f"البوت: {reply}")
                 
-                # إرسال الرد مدمجاً مع الأزرار التفاعلية الجبارة
                 view = SupportView()
                 await message.reply(reply, view=view)
 
-                # إذا طلب الإدارة، يتم منشن الرتبة المخصصة تلقائياً
                 if need_admin_call:
                     target_role = discord.utils.get(guild.roles, name="Support") or discord.utils.get(guild.roles, name="الدعم الفني") or discord.utils.get(guild.roles, name="▴|  𝗔𝗱𝗺𝗶𝗻")
                     if target_role:
