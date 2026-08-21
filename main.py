@@ -33,6 +33,9 @@ intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# ذاكرة مؤقتة لحفظ سياق المحادثة لكل تكت
+channel_histories = {}
+
 @bot.event
 async def on_ready():
     logger.info(f'Bot logged in as {bot.user} (ID: {bot.user.id})')
@@ -43,7 +46,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # التأكد أن الرد فقط داخل رومات التكتات أو الدعم
+    # التفاعل فقط داخل رومات التكتات
     if not message.channel.name or "ticket" not in message.channel.name.lower():
         await bot.process_commands(message)
         return
@@ -54,27 +57,46 @@ async def on_message(message):
             if not user_content:
                 return
 
-            # جمع معلومات بسيطة عن السيرفر أو القنوات المتاحة إذا احتجنا لاحقاً
+            channel_id = message.channel.id
             guild = message.guild
-            stock_status = "متوفرة حالياً في الرومات المخصصة"
-            
-            # فحص بسيط لو فيه رومات تتعلق بالحسابات بالسيرفر
-            channels_list = [c.name for c in guild.text_channels]
-            has_stock_room = any("stock" in c or "حسابات" in c for c in channels_list)
-            
-            if not has_stock_room:
-                stock_status = "لا توجد رومات حسابات حالياً، الحالة تعتبر صيانة أو نفدت الكمية"
 
-            # توجيه صارم ومخصص للديسكورد يمنع العشوائية ويمنع ذكر المواقع الخارجية
+            # فحص رومات قسم المنتجات وقراءة محتواها لتعرف الحالة الحقيقية
+            product_status_info = "لا توجد رومات منتجات واضحة."
+            for channel in guild.text_channels:
+                if "قسم-المنتجات" in channel.name or "stock" in channel.name:
+                    try:
+                        async for hist_msg in channel.history(limit=3):
+                            if "جاري العمل عليها" in hist_msg.content:
+                                product_status_info = f"رومات المنتجات موجودة ({channel.name}) ولكن الحالة حالياً: جاري العمل عليها وتجهيزها."
+                                break
+                            elif hist_msg.content:
+                                product_status_info = f"رومات المنتجات موجودة ({channel.name}) وتحتوي على تحديثات."
+                    except Exception:
+                        pass
+
+            # إدارة ذاكرة المحادثة للتكت الحالي
+            if channel_id not in channel_histories:
+                channel_histories[channel_id] = []
+
+            # إضافة رسالة المستخدم للذاكرة
+            channel_histories[channel_id].append(f"الزبون: {user_content}")
+            if len(channel_histories[channel_id]) > 10:  # الاحتفاظ بآخر 10 رسائل فقط لعدم التشتت
+                channel_histories[channel_id].pop(0)
+
+            history_text = "\n".join(channel_histories[channel_id])
+
+            # التعليمات الصارمة للبوت
             system_prompt = (
-                "أنت موظف دعم فني ذكي و رسمي لمتجر حسابات ألعاب داخل سيرفر ديسكورد فقط. "
-                "قواعد صارمة جداً يجب أن تلتزم بها:\n"
-                "1. ممنوع نهائياً ذكر أي 'موقع إلكتروني' أو زيارة رابط خارجي، كل تعاملك وخدمتك داخل سيرفر الديسكورد هذا فقط.\n"
-                "2. لا تجاوب بأي أجوبة عشوائية أو تخترع معلومات غير موجودة.\n"
-                "3. إذا سأل الزبون عن توفر حسابات، اعتمد على الحالة التالية: " + stock_status + ".\n"
-                "4. تحدث باللهجة السعودية الرسمية والمهذبة، وبدون إطالة.\n"
-                "5. إذا طلب الزبون التحدث مع الإدارة أو شخص بشري، أخبره أنك ستتحقق من المشرفين المتواجدين وتسأله لو حاب تنبههم.\n\n"
-                f"رسالة العميل: {user_content}"
+                "أنت موظف دعم فني ذكي و رسمي لمتجر حسابات ألعاب داخل سيرفر ديسكورد فقط.\n"
+                "قواعد صارمة جداً:\n"
+                "1. ممنوع نهائياً ذكر أي 'موقع إلكتروني' أو زيارة رابط خارجي.\n"
+                "2. لا تجاوب بأي أجوبة عشوائية. حالة المنتجات الحقيقية في السيرفر هي: " + product_status_info + "\n"
+                "   بناءً على ذلك، إذا سأل عن توفر الحسابات ووجدت أنها 'جاري العمل عليها'، أخبره أن الرومات موجودة ولكنها قيد التجهيز والصيانة حالياً وستتوفر قريباً.\n"
+                "3. تحدث باللهجة السعودية الرسمية والمهذبة، وبدون إطالة.\n"
+                "4. تذكر سياق المحادثة السابقة بينك وبينه، ولا تبدأ كلام جديد كلياً إذا كان يكمل نقاشاً سابقاً.\n"
+                "5. إذا طلب التحدث مع الإدارة أو وافق على تنبيههم، انهِ ردك بكلمة [CALL_ADMIN] في نهاية الجملة.\n\n"
+                f"سجل المحادثة السابقة:\n{history_text}\n\n"
+                "رد على آخر رسالة للزبون بناءً على التعليمات السابقة:"
             )
 
             response = client.models.generate_content(
@@ -88,17 +110,44 @@ async def on_message(message):
             elif response.candidates and response.candidates[0].content.parts:
                 reply = response.candidates[0].content.parts[0].text.strip()
 
+            # التحقق إذا طلب البوت استدعاء الإدارة
+            need_admin_call = False
+            if "[CALL_ADMIN]" in reply:
+                need_admin_call = True
+                reply = reply.replace("[CALL_ADMIN]", "").strip()
+
             if reply:
                 if len(reply) > 2000:
                     reply = reply[:1997] + "..."
+                
+                # حفظ رد البوت في الذاكرة أيضاً
+                channel_histories[channel_id].append(f"البوت: {reply}")
                 await message.reply(reply)
+
+                # إذا وافق الزبون وتم استدعاء الإدارة، نقوم بعمل منشن حقيقي للمشرفين
+                if need_admin_call:
+                    admin_mentions = []
+                    for member in guild.members:
+                        # التحقق من رتب الإدارة بناءً على السيرفر عندك (Founder, Admin, Store Owner)
+                        role_names = [role.name.lower() for role in member.roles]
+                        if any(r in role_names for r in ["admin", "founder", "store owner", "owner"]):
+                            if not member.bot:
+                                admin_mentions.append(member.mention)
+                    
+                    if admin_mentions:
+                        # منشن أول 3 مشرفين متواجدين لتنبيههم في التكت
+                        mentions_str = " ".join(admin_mentions[:3])
+                        await message.channel.Send(f"🚨 تنبيه للإدارة: {mentions_str}، يرجى متابعة التكت، العميل بحاجة لكم!")
+                    else:
+                        await message.channel.Send("⚠️ عذراً، لم يتم العثور على مشرفين متاحين حالياً، سيتم خدمتهم قريباً.")
+
             else:
                 await message.reply("حياك الله، تفضل بطلبك أو انتظر أحد الإدارة يخدمك.")
 
         except Exception as e:
             logger.error(f"Gemini API error: {e}", exc_info=True)
             await message.reply(
-                "عذراً، حدث ضغط بسيط. جاري تحويلك للإدارة أو يرجى الانتظار قليلاً."
+                "عذراً، حدث ضغط بسيط. يرجى الانتظار قليلاً وسيتم خدمتك."
             )
     
     await bot.process_commands(message)
@@ -110,13 +159,10 @@ app = Flask(__name__)
 def health_check():
     return "Bot is running"
 
-def run_flask():
-    app.run(host='0.0.0.0', port5=8080, debug=False, use_reloader=False) # تم ضبط البورت بالأسفل صحيحه
-
 def start_flask():
     app.run(host='0.0.0.0', port=8080, debug=False, use_reloader=False)
 
-# تم تعديل دالة التشغيل لتكون سليمة 100%
+# ------------------ Main Entry Point ------------------
 if __name__ == '__main__':
     threading.Thread(target=start_flask, daemon=True).start()
     bot.run(DISCORD_TOKEN)
