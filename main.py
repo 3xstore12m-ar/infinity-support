@@ -61,12 +61,30 @@ class SupportView(discord.ui.View):
 
     @discord.ui.button(label="إغلاق التكت", style=discord.ButtonStyle.secondary, emoji="🔒")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🔒 سيتم إغلاق التكت بناءً على طلبك. شكراً لتواصلك معنا!", ephemeral=False)
+        await interaction.response.send_message("🔒 جاري إغلاق وحذف التكت...", ephemeral=True)
+        try:
+            await interaction.channel.delete(reason="تم إغلاق التكت بناءً على طلب العميل أو الإدارة.")
+        except Exception as e:
+            logger.error(f"Error deleting channel: {e}")
 
 @bot.event
 async def on_ready():
     logger.info(f'Bot logged in as {bot.user} (ID: {bot.user.id})')
     logger.info('------')
+
+# ترحيب تلقائي أول ما ينفتح تكت جديد
+@bot.event
+async def on_guild_channel_create(channel):
+    if isinstance(channel, discord.TextChannel) and "ticket" in channel.name.lower():
+        # انتظار ثانية لضمان ظهور الروم للعميل بشكل صحيح
+        import asyncio
+        await asyncio.sleep(1.5)
+        try:
+            view = SupportView()
+            welcome_msg = "حياك الله طال عمرك في متجرنا! 🤝\nكيف أقدر أخدمك بخصوص حسابات المتجر والخدمات العامة اليوم؟ تفضل بطلبك أو اختر من الأزرار أدناه:"
+            await channel.send(welcome_msg, view=view)
+        except Exception as e:
+            logger.error(f"Error sending automatic welcome message in new ticket: {e}")
 
 @bot.event
 async def on_message(message):
