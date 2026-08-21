@@ -28,6 +28,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 # ------------------ Discord Bot Setup ------------------
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members =^ discord.Intents.default() # تم تصحيحها بالأسفل للتوافق الصحيح
 intents.members = True
 intents.guilds = True
 
@@ -35,6 +36,34 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ذاكرة مؤقتة لحفظ سياق المحادثة لكل تكت
 channel_histories = {}
+
+# ------------------ Interactive Buttons View ------------------
+class SupportView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="استفسار عن الحسابات", style=discord.ButtonStyle.primary, emoji="🛒")
+    async def stock_inquiry(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(
+            "حياك الله! يمكنك الاطلاع على أقسام المنتجات تحت فئة (STORE & PRODUCTS)، حالياً هي قيد التجهيز والصيانة وستتوفر قريباً.",
+            ephemeral=False
+        )
+
+    @discord.ui.button(label="طلب الإدارة / الدعم", style=discord.ButtonStyle.danger, emoji="🚨")
+    async def call_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
+        guild = interaction.guild
+        # البحث عن رتبة الدعم المخصصة أو الإدارة
+        target_role = discord.utils.get(guild.roles, name="Support") or discord.utils.get(guild.roles, name="الدعم الفني") or discord.utils.get(guild.roles, name="▴|  𝗔𝗱𝗺𝗶𝗻")
+        
+        mention_text = target_role.mention if target_role else "@admin"
+        await interaction.response.send_message(
+            f"🚨 تنبيه للإدارة: {mention_text}، يوجد عميل بحاجة لمساعدتكم في هذا التكت، يرجى كتابة تفاصيل استفسارك ليتم خدمتك فوراً!",
+            ephemeral=False
+        )
+
+    @discord.ui.button(label="إغلاق التكت", style=discord.ButtonStyle.secondary, emoji="🔒")
+    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔒 سيتم إغلاق التكت بناءً على طلبك. شكراً لتواصلك معنا!", ephemeral=False)
 
 @bot.event
 async def on_ready():
@@ -60,19 +89,8 @@ async def on_message(message):
             channel_id = message.channel.id
             guild = message.guild
 
-            # فحص رومات قسم المنتجات وقراءة آخر المحتوى لمعرفة الحالة الدقيقة
-            product_status_info = "لا توجد رومات منتجات واضحة."
-            for channel in guild.text_channels:
-                if "قسم-المنتجات" in channel.name or "stock" in channel.name:
-                    try:
-                        async for hist_msg in channel.history(limit=3):
-                            if "جاري العمل عليها" in hist_msg.content:
-                                product_status_info = f"رومات المنتجات موجودة ({channel.name}) ولكن حالتها حالياً: جاري العمل عليها وتجهيزها."
-                                break
-                            elif hist_msg.content:
-                                product_status_info = f"رومات المنتجات موجودة ({channel.name}) وتحتوي على تحديثات."
-                    except Exception:
-                        pass
+            # فحص عام لقسم المنتجات (STORE & PRODUCTS)
+            category_info = "قسم المنتجات الأساسي (STORE & PRODUCTS) يحتوي على أقسام الحسابات، وهي قيد التجهيز والصيانة حالياً."
 
             # إدارة ذاكرة المحادثة للتكت الحالي
             if channel_id not in channel_histories:
@@ -84,15 +102,16 @@ async def on_message(message):
 
             history_text = "\n".join(channel_histories[channel_id])
 
-            # التعليمات الصارمة للبوت (شاملة لجميع أنواع الحسابات العامة وليس الألعاب فقط)
+            # التعليمات الصارمة للبوت
             system_prompt = (
                 "أنت موظف دعم فني ذكي ورسمي لمتجر حسابات عامة وخدمات رقمية داخل سيرفر ديسكورد فقط.\n"
                 "قواعد صارمة جداً:\n"
                 "1. ممنوع نهائياً ذكر أي 'موقع إلكتروني' أو زيارة رابط خارجي خارج الديسكورد.\n"
-                "2. لا تجاوب بأي أجوبة عشوائية. حالة المنتجات الحقيقية في السيرفر هي: " + product_status_info + "\n"
+                "2. لا تجاوب بأي أجوبة عشوائية. حالة المنتجات في السيرفر: " + category_info + "\n"
+                "   إذا سأل عن الحسابات أو المنتجات، وجهه إلى فئة (STORE & PRODUCTS) وأخبره أنها قيد التجهيز حالياً.\n"
                 "3. تحدث باللهجة السعودية الرسمية والمهذبة، وبدون إطالة.\n"
                 "4. تذكر سياق المحادثة السابقة بينك وبينه تماماً.\n"
-                "5. إذا طلب الزبون التحدث مع الإدارة أو الدعم الفني بشدة، أو وافق على أن يكلمه أحد، انهِ ردك بكلمة [CALL_ADMIN] في نهاية الجملة واطلب منه يكتب تفاصيل مشكلته ليراها المشرفون.\n\n"
+                "5. إذا طلب الزبون التحدث مع الإدارة أو الدعم الفني، انهِ ردك بكلمة [CALL_ADMIN] في نهاية الجملة.\n\n"
                 f"سجل المحادثة السابقة:\n{history_text}\n\n"
                 "رد على آخر رسالة للزبون بناءً على التعليمات السابقة:"
             )
@@ -108,7 +127,6 @@ async def on_message(message):
             elif response.candidates and response.candidates[0].content.parts:
                 reply = response.candidates[0].content.parts[0].text.strip()
 
-            # التحقق إذا طلب البوت استدعاء الإدارة
             need_admin_call = False
             if "[CALL_ADMIN]" in reply:
                 need_admin_call = True
@@ -119,27 +137,22 @@ async def on_message(message):
                     reply = reply[:1997] + "..."
                 
                 channel_histories[channel_id].append(f"البوت: {reply}")
-                await message.reply(reply)
+                
+                # إرسال الرد مدمجاً مع الأزرار التفاعلية الجبارة
+                view = SupportView()
+                await message.reply(reply, view=view)
 
-                # إذا وافق الزبون، يقوم البوت بمنشن رتبة الدعم الفني المخصصة في السيرفر
+                # إذا طلب الإدارة، يتم منشن الرتبة المخصصة تلقائياً
                 if need_admin_call:
-                    target_role_name = "support" # اسم الرتبة المخصصة للدعم الفني
-                    role_to_mention = discord.utils.get(guild.roles, name=target_role_name)
-                    
-                    if not role_to_mention:
-                        role_to_mention = discord.utils.get(guild.roles, name="الدعم الفني")
-
-                    if role_to_mention:
-                        await message.channel.send(f"🚨 تنبيه لفريق الدعم: {role_to_mention.mention}، يوجد عميل بحاجة لمساعدتكم، يرجى كتابة تفاصيل استفسارك ليتم خدمتك فوراً!")
+                    target_role = discord.utils.get(guild.roles, name="Support") or discord.utils.get(guild.roles, name="الدعم الفني") or discord.utils.get(guild.roles, name="▴|  𝗔𝗱𝗺𝗶𝗻")
+                    if target_role:
+                        await message.channel.send(f"🚨 تنبيه للإدارة: {target_role.mention}، يوجد عميل بحاجة لمساعدتكم، يرجى كتابة تفاصيل استفسارك ليتم خدمتك فوراً!")
                     else:
-                        admin_role = discord.utils.get(guild.roles, name="▴|  𝗔𝗱𝗺𝗶𝗻")
-                        if admin_role:
-                            await message.channel.send(f"🚨 تنبيه للإدارة: {admin_role.mention}، يوجد عميل بحاجة لمساعدتكم، يرجى كتابة تفاصيل استفسارك!")
-                        else:
-                            await message.channel.send("⚠️ تنبيه: لم يتم العثور على رتبة الدعم المخصصة، يرجى متابعة التكت من الإدارة.")
+                        await message.channel.send("🚨 تنبيه للإدارة: @admin، يوجد عميل بحاجة لمساعدتكم!")
 
             else:
-                await message.reply("حياك الله، تفضل بطلبك أو انتظر أحد الإدارة يخدمك.")
+                view = SupportView()
+                await message.reply("حياك الله، تفضل بطلبك أو اختر من الأزرار بالأسفل.", view=view)
 
         except Exception as e:
             logger.error(f"Gemini API error: {e}", exc_info=True)
